@@ -53,6 +53,14 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 		namespace := env.Namespace()
 		log := logging.FromContext(ctx)
 
+		if v, ok := env.(*environment.MagicEnvironment); ok {
+			opts := v.GetConfigOptions("eventshub")
+			// prepend environment options to eventshub options to give
+			// eventshub options given to the function priority over environment
+			// options
+			options = append(opts, options...)
+		}
+
 		// Compute the user provided envs
 		envs := make(map[string]string)
 		if err := compose(options...)(ctx, envs); err != nil {

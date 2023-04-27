@@ -34,7 +34,7 @@ import (
 )
 
 // EventsHubOption is used to define an env for the eventshub image
-type EventsHubOption = func(context.Context, map[string]string) error
+type EventsHubOption = environment.ConfigOption
 
 // StartReceiver starts the receiver in the eventshub
 // This can be used together with EchoEvent, ReplyWithTransformedEvent, ReplyWithAppendedData
