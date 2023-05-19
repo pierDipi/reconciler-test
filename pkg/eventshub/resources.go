@@ -24,7 +24,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
-	"knative.dev/pkg/logging"
 
 	"knative.dev/reconciler-test/pkg/environment"
 	eventshubrbac "knative.dev/reconciler-test/pkg/eventshub/rbac"
@@ -70,12 +69,11 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 		}
 		env := environment.FromContext(ctx)
 		namespace := env.Namespace()
-		log := logging.FromContext(ctx)
 
 		// Compute the user provided envs
 		envs := make(map[string]string)
 		if err := compose(options...)(ctx, envs); err != nil {
-			log.Fatalf("Error while computing environment variables for eventshub: %s", err)
+			t.Fatalf("Error while computing environment variables for eventshub: %s", err)
 		}
 
 		// eventshub needs tracing and logging config
@@ -122,13 +120,13 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 
 		if isEnforceTLS {
 			if _, err := manifest.InstallYamlFS(ctx, serviceTLSCertificate, cfg); err != nil {
-				log.Fatal(err)
+				t.Fatal(err)
 			}
 		}
 
 		// Deploy Service/Pod
 		if _, err := manifest.InstallYamlFS(ctx, servicePodTemplates, cfg); err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 
 		k8s.WaitForPodReadyOrSucceededOrFail(ctx, t, name)
@@ -146,7 +144,7 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 		if withForwarder {
 			sinkURL, err := service.Address(ctx, serviceName)
 			if err != nil {
-				log.Fatal(err)
+				t.Fatal(err)
 			}
 			// At this point env contains "receiver" so we need to override it.
 			envs[EventGeneratorsEnv] = "forwarder"
@@ -157,7 +155,7 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 
 			// Deploy Forwarder
 			if _, err := manifest.InstallYamlFS(ctx, forwarderTemplates, cfg); err != nil {
-				log.Fatal(err)
+				t.Fatal(err)
 			}
 			knativeservice.IsReady(name)
 		}

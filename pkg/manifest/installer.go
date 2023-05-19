@@ -76,12 +76,12 @@ func InstallYamlFS(ctx context.Context, fsys fs.FS, base map[string]interface{})
 
 	// Temp
 	refs := manifest.References()
-	if j, err := json.MarshalIndent(refs, "", "  "); err == nil {
-		log.Debug("Created: ", string(j))
-	} else {
-		log.Fatal(err)
+	j, err := json.MarshalIndent(refs, "", "  ")
+	if err != nil {
+		return manifest, err
 	}
 
+	log.Debug("Created: ", string(j))
 	return manifest, nil
 }
 
