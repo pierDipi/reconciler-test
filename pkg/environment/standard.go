@@ -54,6 +54,7 @@ type ConfigurationOption func(Configuration) Configuration
 // context.Context for later use.
 func NewStandardGlobalEnvironment(opts ...ConfigurationOption) GlobalEnvironment {
 	opts = append(opts, initIstioFlags())
+	opts = append(opts, initEventsHubFlags())
 	config := resolveConfiguration(opts)
 	ctx := testlog.NewContext(config.Context)
 

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -81,6 +82,17 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 		if err := registerImage(ctx); err != nil {
 			t.Fatalf("Failed to install eventshub image: %v", err)
 		}
+
+		config := environment.GetEventsHubConfig(ctx)
+
+		if config.TLS.Enabled {
+			var err error
+			ctx, err = installCAResources(ctx, t)
+			if err != nil {
+				t.Fatalf("Failed to install eventshub CA resources: %v", err)
+			}
+		}
+
 		env := environment.FromContext(ctx)
 		namespace := env.Namespace()
 		log := logging.FromContext(ctx)
@@ -89,6 +101,10 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 		envs := make(map[string]string)
 		if err := compose(options...)(ctx, envs); err != nil {
 			log.Fatalf("Error while computing environment variables for eventshub: %s", err)
+		}
+
+		if config.TLS.Enabled {
+			envs[EnforceTLS] = "true"
 		}
 
 		// eventshub needs tracing and logging config
@@ -209,25 +225,27 @@ func Install(name string, options ...EventsHubOption) feature.StepFn {
 
 func WithTLS(t feature.T) environment.EnvOpts {
 	return func(ctx context.Context, env environment.Environment) (context.Context, error) {
-
 		return environment.WithPostInit(ctx, func(ctx context.Context, env environment.Environment) (context.Context, error) {
-
-			if _, err := manifest.InstallYamlFS(ctx, caTLSCertificates, nil); err != nil {
-				return ctx, fmt.Errorf("failed to install CA certificates and issuer: %w", err)
-			}
-
-			secret.IsPresent(caSecretName, secret.AssertKey("ca.crt"))(ctx, t)
-
-			caCerts, err := getCACertsFromSecret(ctx)
-			if err != nil {
-				return ctx, err
-			}
-			s := string(caCerts)
-			ctx = WithCaCerts(ctx, &s)
-
-			return ctx, nil
+			return installCAResources(ctx, t)
 		}), nil
 	}
+}
+
+func installCAResources(ctx context.Context, t feature.T) (context.Context, error) {
+	if _, err := manifest.InstallYamlFS(ctx, caTLSCertificates, nil); err != nil {
+		return ctx, fmt.Errorf("failed to install CA certificates and issuer: %w", err)
+	}
+
+	secret.IsPresent(caSecretName, secret.AssertKey("ca.crt"))(ctx, t)
+
+	caCerts, err := getCACertsFromSecret(ctx)
+	if err != nil {
+		return ctx, err
+	}
+	s := string(caCerts)
+	ctx = WithCaCerts(ctx, &s)
+
+	return ctx, nil
 }
 
 func ReceiverGVR(ctx context.Context) schema.GroupVersionResource {
@@ -254,7 +272,14 @@ func WithCaCerts(ctx context.Context, caCerts *string) context.Context {
 func GetCaCerts(ctx context.Context) *string {
 	caCerts := ctx.Value(caCertsKey{})
 	if caCerts == nil {
-		return nil
+		caCertsFromSecret, err := getCACertsFromSecret(ctx)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil { // Panic on any error other than "Not found"
+			panic(err)
+		}
+		return pointer.String(string(caCertsFromSecret))
 	}
 	return caCerts.(*string)
 }

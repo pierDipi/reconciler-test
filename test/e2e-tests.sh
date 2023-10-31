@@ -27,4 +27,6 @@ set -Eeuo pipefail
 
 go_test_e2e -timeout 1h ./test/...
 
+go_test_e2e -timeout 1h -run TLS ./test/e2e/eventshub/... --eventshub.tls.enabled=true
+
 success
